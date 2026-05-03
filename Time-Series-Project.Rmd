@@ -1,0 +1,79 @@
+---
+title: "Energy Market Volatility Analysis using MGARCH"
+subtitle: "Project"
+date: "`r Sys.Date()`"
+author: 
+  - name: "Evelina Vaitkevičiūtė <evelina.vaitkeviciute@mif.stud.lt>"
+    title: DM (I) 1 k. - 2 variantas (No. 2525061)
+output:
+  readthedown::readthedown:
+    highlight: kate
+    fig_width: 14
+    fig_height: 8
+    number_sections: false
+    code_folding: show
+    logo: ./logo/MIF_EN.png
+    css:
+    - https://use.fontawesome.com/releases/v5.15.4/css/all.css
+    - style.css
+---
+
+```{r setup, include=FALSE}
+## Global options
+knitr::opts_chunk$set(cache = TRUE)
+```
+
+This is a project for a Multivariate-Time-Series-and-Financial-Econometrics course, analysing the volatility dynamics and time-varying correlations between the stock and energy markets using a Multivariate GARCH (MGARCH) model. The analysis employs daily financial data obtained from Yahoo Finance through the `quantmod` package in R.
+
+**Software and libraries**
+
+```{r, echo=FALSE}
+sessionInfo()
+```
+
+# Data
+
+Below is given code To download the data set used in project.
+
+```{r, error=FALSE, message=FALSE, warning=FALSE}
+getData <- function(){
+  
+  library(quantmod)
+  
+  symbols_assets <- c("^GSPC", "BZ=F")
+  
+  for(sym in symbols_assets){
+    
+    x <- getSymbols(sym,
+                    auto.assign = FALSE,
+                    src = "yahoo",
+                    from = "2016-01-01",
+                    to   = "2026-04-01")
+    
+    clean_name <- gsub("\\^|=F", "", sym)
+    
+    assign(clean_name,
+           na.omit(x),
+           envir = .GlobalEnv)
+  }
+}
+getData()
+```
+
+Two representative market indices are used:
+
+- the **^GSPC** as a proxy for the United States stock market, and
+
+```{r, echo=FALSE}
+head(GSPC)
+```
+
+- the **BZ=F** as a proxy for the global energy market.
+
+```{r, echo=FALSE}
+head(BZ)
+```
+
+# Descriptive statistics
+
+# Forecasting
