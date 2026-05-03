@@ -3,8 +3,8 @@ This is a project for a *Multivariate-Time-Series-and-Financial-Econometrics* co
 
 Two representative market indices are used:
 
-- the ^GSPC as a proxy for the United States stock market, and
-- the BZ=F as a proxy for the global energy market.
+- S&P 500 index – the ^GSPC as a proxy for the United States stock market, and
+- Brent Oil – the BZ=F as a proxy for the global energy market.
 
 The files `Time-Series-Project.html` and `Time-Series-Project.Rmd` contain the solution to the task in `.html` and `.Rmd` formats. Folder `logo` and `style.css` file were used to style `R Markdown`.
 
