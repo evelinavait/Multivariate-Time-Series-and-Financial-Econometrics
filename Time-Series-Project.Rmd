@@ -1,5 +1,5 @@
 ---
-title: "Energy Market Volatility Analysis using MGARCH"
+title: "Energy and Stock Markets Volatility Analysis using MGARCH"
 subtitle: "Project"
 date: "`r Sys.Date()`"
 author: 
@@ -31,9 +31,23 @@ This is a project for a Multivariate-Time-Series-and-Financial-Econometrics cour
 sessionInfo()
 ```
 
+```{r, error=FALSE, message=FALSE, warning=FALSE}
+library(quantmod)
+library(rugarch)
+library(rmgarch)
+library(PerformanceAnalytics)
+library(xts)
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+library(scales)
+library(moments)
+```
+
 # Data
 
-Below is given code To download the data set used in project.
+Below is given code to download the data set used in project.
 
 ```{r, error=FALSE, message=FALSE, warning=FALSE}
 getData <- function(){
@@ -62,18 +76,415 @@ getData()
 
 Two representative market indices are used:
 
-- the **^GSPC** as a proxy for the United States stock market, and
+- **S&P 500 index** (^GSPC) as a proxy for the United States stock market, and
 
 ```{r, echo=FALSE}
 head(GSPC)
 ```
 
-- the **BZ=F** as a proxy for the global energy market.
+Dataset column names:
+```{r}
+ls(GSPC)
+```
+
+- **Brent Oil** (BZ=F) as a proxy for the global energy market.
 
 ```{r, echo=FALSE}
 head(BZ)
 ```
 
-# Descriptive statistics
+Dataset column names:
+```{r}
+ls(BZ)
+```
+
+# Data preparation
+
+*Consider that:*
+
+- Time is consistent (i.e., ignore non-working days and periods with empty (`NA`) values),
+- ignore exchange rate effects,
+- $P_t^{(F)}$ - the closing price of the company's shares at time *t*
+
+## Data filtering
+
+First, need to extract Closing Prices:
+
+```{r}
+sp500 <- Cl(GSPC)
+brent <- Cl(BZ)
+```
+
+Only those `GSPC` and `BZ=F` rows that do not have NA values are selected and are merged.
+
+```{r}
+data <- na.omit(merge(sp500, brent))
+```
+
+```{r, echo=FALSE}
+head(data)
+```
+
+The final dataset consisted of **`r nrow(data)`** observations.
+
+```{r}
+data_old <- copy(data)
+cols <- grep(".Close", colnames(data), value = TRUE)
+data <- data.frame(time = index(data), value = data[, cols])
+data <- as.data.table(data)
+
+setnames(data, old = names(data), new = sub("^value\\.", "", names(data)))
+```
+
+
+```{r, echo=FALSE, fig.width=12, fig.height=5.5}
+
+# Select closing prices
+prices <- data[, c("time", "GSPC.Close", "BZ.F.Close")]
+
+# Normalize prices (Base = 100)
+prices$GSPC.Close <- prices$GSPC.Close / prices$GSPC.Close[1] * 100
+prices$BZ.F.Close <- prices$BZ.F.Close / prices$BZ.F.Close[1] * 100
+
+# Convert to long format
+prices_long <- melt(
+  prices,
+  id.vars = "time",
+  variable.name = "Market",
+  value.name = "Price"
+)
+
+p <- ggplot(prices_long,
+            aes(x = time,
+                y = Price,
+                color = Market)) +
+  geom_line(linewidth = 1) +
+
+  scale_color_manual(
+    values = c(
+      "GSPC.Close" = "navy",
+      "BZ.F.Close" = "azure3"
+    ),
+    labels = c(
+      "S&P 500",
+      "Brent Oil"
+    )
+  ) +
+
+  labs(
+    x = "Time",
+    y = "Index (Base = 100)",
+    color = "Market"
+  ) +
+
+  theme_minimal() +
+
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    axis.title.x = element_text(size = 17),
+    axis.title.y = element_text(size = 17),
+    axis.text.x = element_text(size = 16),
+    axis.text.y = element_text(size = 16),
+    legend.title = element_text(size = 16),
+    legend.text = element_text(size = 15),
+    legend.position = "top"
+  )
+
+print(p)
+
+ggsave(
+  "closing_prices.pdf",
+  plot = p,
+  width = 12,
+  height = 5.5,
+  dpi = 300
+)
+```
+
+## Data transformation
+Simple returns are calculated using the closing prices of company stocks and stock indices. Simple returns are expressed in logarithmic form and are further analyzed as log-returns.
+
+```{r}
+cols <- grep(".Close", colnames(data), value = TRUE)
+data[, paste0(cols, ".simple") :=
+      lapply(.SD, function(x) x / shift(x) - 1),
+   .SDcols = cols]
+
+data[, paste0(cols, ".log") :=
+      lapply(.SD, function(x) log(x) - shift(log(x))),
+   .SDcols = cols]
+```
+
+```{r}
+data[, c("time", grep("simple|log", colnames(data), value = TRUE)), with = FALSE] %>% head(5)
+```
+
+The first value (row) is omitted because, when calculating the return on the very first day, we do not have a previous value.
+
+```{r}
+data <- data[-1, ]
+```
+
+```{r}
+data[, c("time", grep("simple|log", colnames(data), value = TRUE)), with = FALSE] %>% head(5)
+```
+
+
+
+
+For further analysis will be used log returns:
+
+```{r}
+log_returns <- na.omit(diff(log(data_old)))
+head(log_returns)
+```
+
+## Descriptive statistics
+```{r}
+desc_stats <- data.table(
+  Variable = names(log_returns),
+  
+  Mean = sapply(log_returns, mean, na.rm = TRUE),
+  Median = sapply(log_returns, median, na.rm = TRUE),
+  Min = sapply(log_returns, min, na.rm = TRUE),
+  Max = sapply(log_returns, max, na.rm = TRUE),
+  Std_Dev = sapply(log_returns, sd, na.rm = TRUE),
+  
+  Skewness = sapply(log_returns, skewness, na.rm = TRUE),
+  Kurtosis = sapply(log_returns, kurtosis, na.rm = TRUE)
+)
+
+print(desc_stats)
+
+```
+
+## Normality
+```{r, echo=FALSE}
+```{r fig.width=10, fig.height=5}
+par(
+  mfrow = c(1, 2),
+  mar = c(4, 4, 2, 1)
+)
+
+sp500_returns <- as.numeric(log_returns$GSPC.Close)
+
+h1 <- hist(
+  sp500_returns,
+  col = "#a5c8e0",
+  border = "#104A7E",
+  prob = TRUE,
+  breaks = 50,
+  xlab = "Log Returns",
+  ylab = "Density",
+  main = "",
+  ylim = c(0, max(density(sp500_returns)$y) * 1.1)
+)
+
+d1 <- density(sp500_returns)
+lines(d1$x, d1$y, col = "#868686", lwd = 2)
+rug(sp500_returns, col = "#104A7E")
+mtext("A", side = 3, adj = 0, line = 0.5, cex = 1.3, font = 2)
+
+brent_returns <- as.numeric(log_returns$BZ.F.Close)
+
+h2 <- hist(
+  brent_returns,
+  col = "grey80",
+  border = "grey40",
+  prob = TRUE,
+  breaks = 50,
+  xlab = "Log Returns",
+  ylab = "Density",
+  main = "",
+  ylim = c(0, max(density(brent_returns)$y) * 1.1)
+)
+
+d2 <- density(brent_returns)
+lines(d2$x, d2$y, col = "#868686", lwd = 2)
+rug(brent_returns, col = "grey40")
+mtext("B", side = 3, adj = 0, line = 0.5, cex = 1.3, font = 2)
+```
+
+Jarque-Bera Normality Test
+```{r}
+log_returns_SP500 <-  as.numeric(log_returns$GSPC.Close)
+jarque.test(log_returns_SP500)
+```
+```{r}
+log_returns_Brent <-  as.numeric(log_returns$BZ.F.Close)
+jarque.test(log_returns_Brent)
+```
+
+Since p-value = $2.2 \times 10^{-16} < 0.05$, we reject the null hypothesis.
+
+## Time series plots
+
+```{r, echo=FALSE, error=FALSE, message=FALSE, warning=FALSE}
+ggplot.corr <- function(data, lag.max = 24, ci = 0.95, large.sample.size = TRUE, horizontal = TRUE,...) {
+  
+  require(ggplot2)
+  require(dplyr)
+  require(cowplot)
+  
+  if(horizontal == TRUE) {numofrow <- 1} else {numofrow <- 2}
+  
+  list.acf <- acf(data, lag.max = lag.max, type = "correlation", plot = FALSE)
+  N <- as.numeric(list.acf$n.used)
+  df1 <- data.frame(lag = list.acf$lag, acf = list.acf$acf)
+  df1$lag.acf <- dplyr::lag(df1$acf, default = 0)
+  df1$lag.acf[2] <- 0
+  df1$lag.acf.cumsum <- cumsum((df1$lag.acf)^2)
+  df1$acfstd <- sqrt(1/N * (1 + 2 * df1$lag.acf.cumsum))
+  df1$acfstd[1] <- 0
+  df1 <- select(df1, lag, acf, acfstd)
+  
+  list.pacf <- acf(data, lag.max = lag.max, type = "partial", plot = FALSE)
+  df2 <- data.frame(lag = list.pacf$lag,pacf = list.pacf$acf)
+  df2$pacfstd <- sqrt(1/N)
+  
+  if(large.sample.size == TRUE) {
+    plot.acf <- ggplot(data = df1, aes( x = lag, y = acf)) +
+    geom_area(aes(x = lag, y = qnorm((1+ci)/2)*acfstd), fill = "#B9CFE7") +
+    geom_area(aes(x = lag, y = -qnorm((1+ci)/2)*acfstd), fill = "#B9CFE7") +
+    geom_col(fill = "#4373B6", width = 0.7) +
+    scale_x_continuous(breaks = seq(0,max(df1$lag),6)) +
+    scale_y_continuous(name = element_blank(), 
+                       limits = c(min(df1$acf,df2$pacf),1)) +
+    ggtitle("ACF") +
+    theme_bw()
+    
+    plot.pacf <- ggplot(data = df2, aes(x = lag, y = pacf)) +
+    geom_area(aes(x = lag, y = qnorm((1+ci)/2)*pacfstd), fill = "#B9CFE7") +
+    geom_area(aes(x = lag, y = -qnorm((1+ci)/2)*pacfstd), fill = "#B9CFE7") +
+    geom_col(fill = "#4373B6", width = 0.7) +
+    scale_x_continuous(breaks = seq(0,max(df2$lag, na.rm = TRUE),6)) +
+    scale_y_continuous(name = element_blank(),
+                       limits = c(min(df1$acf,df2$pacf),1)) +
+    ggtitle("PACF") +
+    theme_bw()
+  }
+  else {
+    plot.acf <- ggplot(data = df1, aes( x = lag, y = acf)) +
+    geom_col(fill = "#4373B6", width = 0.7) +
+    geom_hline(yintercept = qnorm((1+ci)/2)/sqrt(N), 
+               colour = "sandybrown",
+               linetype = "dashed") + 
+    geom_hline(yintercept = - qnorm((1+ci)/2)/sqrt(N), 
+               colour = "sandybrown",
+               linetype = "dashed") + 
+    scale_x_continuous(breaks = seq(0,max(df1$lag),6)) +
+    scale_y_continuous(name = element_blank(), 
+                       limits = c(min(df1$acf,df2$pacf),1)) +
+    ggtitle("ACF") +
+    theme_bw()
+    
+    plot.pacf <- ggplot(data = df2, aes(x = lag, y = pacf)) +
+    geom_col(fill = "#4373B6", width = 0.7) +
+    geom_hline(yintercept = qnorm((1+ci)/2)/sqrt(N), 
+               colour = "sandybrown",
+               linetype = "dashed") + 
+    geom_hline(yintercept = - qnorm((1+ci)/2)/sqrt(N), 
+               colour = "sandybrown",
+               linetype = "dashed") + 
+    scale_x_continuous(breaks = seq(0,max(df2$lag, na.rm = TRUE),6)) +
+    scale_y_continuous(name = element_blank(),
+                       limits = c(min(df1$acf,df2$pacf),1)) +
+    ggtitle("PACF") +
+    theme_bw()
+  }
+  cowplot::plot_grid(plot.acf, plot.pacf, nrow = numofrow)
+}
+
+
+```
+
+```{r}
+log_returns_gspc <- as.numeric(na.omit(diff(log(data_old[,"GSPC.Close"]))))
+log_returns_brent <- as.numeric(na.omit(diff(log(data_old[,"BZ.F.Close"]))))
+p <- ggplot.corr(
+    data = log_returns_gspc,
+    lag.max = 24,
+    ci = 0.95,
+    large.sample.size = TRUE,
+    horizontal = TRUE
+)
+p
+```
+
+```{r, echo=FALSE}
+ggsave(
+    filename = "acf_pacf_panel.png",
+    plot = p,
+    width = 10,     # adjust to match your screenshot proportions
+    height = 4,     # wider than tall
+    dpi = 300
+)
+```
+
+```{r}
+Box.test(log_returns_gspc^2, lag = 10, type = "Ljung-Box")
+Box.test(log_returns_brent^2, lag = 10, type = "Ljung-Box")
+```
+
+# MGARCH modelling
+
+## Univariate GARCH(1,1)
+
+```{r}
+library(rugarch)
+
+uspec <- ugarchspec(
+  variance.model = list(model = "sGARCH", garchOrder = c(1,1)),
+  mean.model = list(armaOrder = c(0,0)),
+  distribution.model = "std"  # student-t for fat tails
+)
+
+fit_gspc  <- ugarchfit(uspec, data = log_returns_gspc)
+fit_brent <- ugarchfit(uspec, data = log_returns_brent)
+
+show(fit_gspc)
+show(fit_brent)
+fit_gspc
+fit_brent
+```
+
+```{r}
+# Standardized residuals
+plot(fit_gspc,  which = 8)
+plot(fit_brent, which = 8)
+
+# Ljung-Box on residuals
+Box.test(residuals(fit_gspc,  standardize = TRUE)^2, lag = 10, type = "Ljung-Box")
+Box.test(residuals(fit_brent, standardize = TRUE)^2, lag = 10, type = "Ljung-Box")
+```
+
+## DCC-MGARCH
+```{r}
+library(rmgarch)
+
+dcc_spec <- dccspec(
+  uspec = multispec(replicate(2, uspec)),
+  dccOrder = c(1,1),
+  distribution = "mvt"
+)
+
+returns_matrix <- cbind(log_returns_gspc, log_returns_brent)
+dcc_fit <- dccfit(dcc_spec, data = returns_matrix)
+dcc_fit
+```
+
+```{r}
+corr <- rcor(dcc_fit)
+
+corr_series <- corr[1,2,]
+plot(corr_series, type = "l",
+     ylab = "Correlation", xlab = "Time")
+```
 
 # Forecasting
+```{r}
+# forecast horizon (e.g. 10 days)
+dcc_forecast <- dccforecast(dcc_fit, n.ahead = 10)
+rcor(dcc_forecast)
+plot(dcc_fit, which = 4)
+```
