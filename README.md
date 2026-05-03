@@ -44,5 +44,3 @@ getData()
 - $P_t^{(F)}$ - the closing price of the company's shares at time *t*
 
 Using the closing prices of the company's shares and stock index symbols, calculate the simple returns. Express the simple returns in logarithmic terms and further analyse the logarithmic returns.
-
-Divide the time series into training (80%) and testing (20%) samples. Build the models for the training sample and predict for the testing sample.
