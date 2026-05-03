@@ -41,7 +41,7 @@ getData()
 
 - Time is consistent (i.e., ignore non-working days and periods with empty (`NA`) values),
 - ignore exchange rate effects,
-- $P_t^{(F)}$ - the closing price of the company's shares at time t
+- $P_t^{(F)}$ - the closing price of the company's shares at time *t*
 
 Using the closing prices of the company's shares and stock index symbols, calculate the simple returns. Express the simple returns in logarithmic terms and further analyse the logarithmic returns.
 
