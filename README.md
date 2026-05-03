@@ -6,7 +6,7 @@ Two representative market indices are used:
 - the ^GSPC as a proxy for the United States stock market, and
 - the BZ=F as a proxy for the global energy market.
 
-The files `time_series_project.html` and `time_series_project.Rmd` contain the solution to the task in `.html` and `.Rmd` formats.
+The files `Time-Series-Project.html` and `Time-Series-Project.Rmd` contain the solution to the task in `.html` and `.Rmd` formats.
 
 ## Data
 To download the data, run the code below:
@@ -41,6 +41,6 @@ getData()
 - ignore exchange rate effects,
 - $P_t^{(F)}$ - the closing price of the company's shares at time t
 
-Using the closing prices of the company's shares and stock index symbols, calculate the simple returns. Express the simple returns in logarithmic terms and analyse the logarithmic returns further.
+Using the closing prices of the company's shares and stock index symbols, calculate the simple returns. Express the simple returns in logarithmic terms and further analyse the logarithmic returns.
 
 Divide the time series into training (80%) and testing (20%) samples. Build the models for the training sample and predict for the testing sample.
