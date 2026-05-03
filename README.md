@@ -1,12 +1,12 @@
 ## Stock market volatility analysis using MGARCH model
-This is a project for a *Multivariate-Time-Series-and-Financial-Econometrics* course, analysing the volatility dynamics and time-varying correlations between the stock and energy markets using a Multivariate GARCH (MGARCH) model. The analysis employs daily financial data obtained from Yahoo Finance through the `quantmod` package in R.
+This is a project for a *Multivariate-Time-Series-and-Financial-Econometrics* course, analysing the volatility dynamics and time-varying correlations between the stock and energy markets using a Multivariate GARCH (MGARCH) model. The analysis employs daily financial data obtained from Yahoo Finance through the `quantmod` package in `R`.
 
 Two representative market indices are used:
 
 - the ^GSPC as a proxy for the United States stock market, and
 - the BZ=F as a proxy for the global energy market.
 
-The files `Time-Series-Project.html` and `Time-Series-Project.Rmd` contain the solution to the task in `.html` and `.Rmd` formats.
+The files `Time-Series-Project.html` and `Time-Series-Project.Rmd` contain the solution to the task in `.html` and `.Rmd` formats. Folder `logo` and `style.css` file were used to style `R Markdown`.
 
 ## Data
 To download the data, run the code below:
